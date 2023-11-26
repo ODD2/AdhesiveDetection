@@ -12,7 +12,7 @@ import torchaudio
 
 from tqdm import tqdm
 from src.unet import UNet
-from src.dataset import GlueDataset
+from src.dataset import SynthesisGlueDataset
 from torch.utils.data import DataLoader
 from sklearn.metrics import top_k_accuracy_score
 
@@ -20,7 +20,7 @@ from sklearn.metrics import top_k_accuracy_score
 
 # logging.basicConfig(level="DEBUG")
 DEVICE = "cuda"
-BEST_SCORE = float("-inf")
+BEST_SCORE = float("inf")
 
 
 def set_seed(seed):
@@ -50,7 +50,8 @@ class Base(nn.Module):
 
         loss = torch.nn.functional.cross_entropy(
             features,
-            y
+            y,
+            torch.tensor([0.5, 2], device=y.device)
         )
 
         return dict(
@@ -76,27 +77,29 @@ def valid(model, dataloaders):
     for batch in tqdm(dataloaders["valid"]):
         x = batch["img"]
         y = batch["mask"]
+        x = x.to(dtype=torch.float32)
+        y = y.to(dtype=torch.long)
         result = model.evaluate(
             x=x.to(DEVICE),
             y=y.to(DEVICE)
         )
         loss = result["loss"]
         logits = result["features"]
-        dataset_probs += logits.softmax(dim=-1).tolist()
-        dataset_labels += y.argmax(dim=1).tolist()
+        # dataset_probs += logits.softmax(dim=-1).tolist()
+        # dataset_labels += y.argmax(dim=1).tolist()
         dataset_loss.append(loss.mean().detach().cpu().item())
 
-    top1 = top_k_accuracy_score(dataset_labels, dataset_probs, k=1)
-    top3 = top_k_accuracy_score(dataset_labels, dataset_probs, k=3)
+    # top1 = top_k_accuracy_score(dataset_labels, dataset_probs, k=1)
+    # top3 = top_k_accuracy_score(dataset_labels, dataset_probs, k=3)
     loss = sum(dataset_loss) / len(dataset_loss)
 
-    if (top1 > BEST_SCORE):
-        BEST_SCORE = top1
+    if (loss < BEST_SCORE):
+        BEST_SCORE = loss
         torch.save(model.state_dict(), f"models/{wandb.run.id}.pt")
 
     return dict(
-        top1=top1,
-        top3=top3,
+        # top1=top1,
+        # top3=top3,
         loss=loss
     )
 
@@ -117,11 +120,11 @@ def train(model, dataloaders, optimizer, epochs, lr_scheduler):
         wandb.log(
             {
                 "lr": get_lr(optimizer)
-            }
+            },
+            step=global_step
         )
-        _batch = 0
+
         for batch in tqdm(train_dataloader):
-            _batch += 1
             global_step += 1
 
             x = batch["img"]
@@ -172,7 +175,7 @@ def main(args):
     # create dataloaders
     dataloaders = {
         split: DataLoader(
-            GlueDataset(
+            SynthesisGlueDataset(
                 root_dir="./dataset",
                 split=split,
                 file_match_pairs=[
@@ -234,11 +237,11 @@ def main(args):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", type=int)
-    parser.add_argument("--num_workers", type=int)
+    parser.add_argument("--batch_size", type=int, default=30)
+    parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--epoch", type=int, default=10)
     parser.add_argument("--test", action="store_true")
-    parser.add_argument("--lr", type=float, default=1e-2)
+    parser.add_argument("--lr", type=float, default=1e-3)
     return parser.parse_args()
 
 
