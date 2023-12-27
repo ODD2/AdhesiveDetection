@@ -39,12 +39,13 @@ python -m main \
  ```
 
 # Evaluation
+- evaluate the pre-trained model on the validation and test subset with metrics including: accuracy, F1 and IoU
  ```shell
 python -m evaluations \
 --model_path=./models/xxxx.py
  ```
 # Inference
-# Evaluation
+- inference the given image for the adhesive mask, the result will be save to `./mask.png`
  ```shell
 python -m inference \
 --model_path=./models/xxxx.py \
