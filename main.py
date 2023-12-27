@@ -5,9 +5,9 @@ import pickle
 import random
 import logging
 import argparse
+import torchaudio
 import numpy as np
 import torch.nn as nn
-import torchaudio
 
 
 from tqdm import tqdm
@@ -51,7 +51,7 @@ class Base(nn.Module):
         loss = torch.nn.functional.cross_entropy(
             features,
             y,
-            torch.tensor([0.5, 2], device=y.device)
+            torch.tensor([0.5, 2.0], device=y.device)
         )
 
         return dict(
@@ -67,11 +67,9 @@ def get_lr(optimizer):
 
 # validation function
 @torch.no_grad()
-def valid(model, dataloaders):
+def valid(model, dataloaders, epoch):
     global BEST_SCORE
     model.eval()
-    dataset_probs = []
-    dataset_labels = []
     dataset_loss = []
 
     for batch in tqdm(dataloaders["valid"]):
@@ -84,9 +82,6 @@ def valid(model, dataloaders):
             y=y.to(DEVICE)
         )
         loss = result["loss"]
-        logits = result["features"]
-        # dataset_probs += logits.softmax(dim=-1).tolist()
-        # dataset_labels += y.argmax(dim=1).tolist()
         dataset_loss.append(loss.mean().detach().cpu().item())
 
     # top1 = top_k_accuracy_score(dataset_labels, dataset_probs, k=1)
@@ -95,11 +90,36 @@ def valid(model, dataloaders):
 
     if (loss < BEST_SCORE):
         BEST_SCORE = loss
-        torch.save(model.state_dict(), f"models/{wandb.run.id}.pt")
+        os.makedirs("models/", exist_ok=True)
+        torch.save(model.state_dict(), f"models/{wandb.run.id}_{epoch}.pt")
 
     return dict(
         # top1=top1,
         # top3=top3,
+        loss=loss
+    )
+
+
+@torch.no_grad()
+def test(model, dataloaders):
+    model.eval()
+    dataset_loss = []
+
+    for batch in tqdm(dataloaders["test"]):
+        x = batch["img"]
+        y = batch["mask"]
+        x = x.to(dtype=torch.float32)
+        y = y.to(dtype=torch.long)
+        result = model.evaluate(
+            x=x.to(DEVICE),
+            y=y.to(DEVICE)
+        )
+        loss = result["loss"]
+        dataset_loss.append(loss.mean().detach().cpu().item())
+
+    loss = sum(dataset_loss) / len(dataset_loss)
+
+    return dict(
         loss=loss
     )
 
@@ -153,9 +173,7 @@ def train(model, dataloaders, optimizer, epochs, lr_scheduler):
             )
 
         # validation
-        metrics = valid(model, dataloaders)
-        model.zero_grad()
-        model.train()
+        metrics = valid(model, dataloaders, epoch=_epoch)
         wandb.log(
             {
                 f"valid/{name}": value
@@ -163,6 +181,20 @@ def train(model, dataloaders, optimizer, epochs, lr_scheduler):
             },
             step=global_step
         )
+
+        # test
+        metrics = test(model, dataloaders)
+        wandb.log(
+            {
+                f"test/{name}": value
+                for name, value in metrics.items()
+            },
+            step=global_step
+        )
+
+        # restore status
+        model.zero_grad()
+        model.train()
 
         # step lr scheduler
         if (not type(lr_scheduler) == type(None)):
@@ -184,11 +216,11 @@ def main(args):
                 ]
             ),
             shuffle=(True if split == "train" else False),
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
+            batch_size=(2 if args.test else args.batch_size),
+            num_workers=(0 if args.test else args.num_workers),
             drop_last=(True if split == "train" else False)
         )
-        for split in ["train", "valid"]
+        for split in ["train", "valid", "test"]
     }
 
     # create model
@@ -200,7 +232,7 @@ def main(args):
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr,
-        weight_decay=0.0
+        weight_decay=0.1
     )
 
     # create lr scheduler
@@ -239,9 +271,9 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, default=30)
     parser.add_argument("--num_workers", type=int, default=0)
-    parser.add_argument("--epoch", type=int, default=10)
+    parser.add_argument("--epoch", type=int, default=30)
     parser.add_argument("--test", action="store_true")
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr", type=float, default=5e-5)
     return parser.parse_args()
 
 

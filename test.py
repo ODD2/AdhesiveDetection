@@ -12,68 +12,32 @@ plt.imshow(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY), cmap="gray")
 plt.show()
 
 # %%
-
-
-# %%
-
-
-process_refraction(
+import random
+import numpy as np
+# random.seed(1019)
+# np.random.seed(1019)
+a = process_refraction(
     img,
-    mask_radius=40,
-    glue_height=10,
-    n=1.3,
+    mask_type="ell",
+    mask_params=dict(
+        a=250, b=200, c=40,
+        base_height=1,
+    ),
+    n=4,
     visualize=True,
-    light_angle=60,
+    light_angle=80,
     color_mask=[10, 10, 10],
-    granulity=10,
-    light_intensity=30,
-
+    granulity=6,
+    glue_la_coef=1.05,
+    # light_intensity=128,
+    light_intensity=100,
+    light_focusness=5,
+    amb_intensity=1.3,
+    amb_focusness=3,
+    # disable_mask_transform=True,
+    rand_count=1
 )
 
+plt.savefig("test.png")
 
 # %%
-if __name__ == "__main__":
-    x = process_refraction(
-        img,
-        mask_radius=40,
-        glue_height=10,
-        n=1.3,
-        visualize=True,
-        light_angle=60,
-        color_mask=[10, 10, 10],
-        granulity=5,
-        light_intensity=70,
-
-    )
-
-    # %%
-    for i in range(90, 30, -10):
-        x = process_refraction(
-            img,
-            mask_radius=50,
-            glue_height=0,
-            n=1.3,
-            visualize=True,
-            light_angle=i,
-        )
-
-    # %%
-    for i in range(50, 0, -5):
-        x = process_refraction(
-            img,
-            mask_radius=50,
-            glue_height=0,
-            n=1.3,
-            visualize=True,
-            glue_la_coef=float(i) / 1000,
-        )
-    # %%
-    for i in range(1, 50, 5):
-        x = process_refraction(
-            img,
-            mask_radius=50,
-            glue_height=0,
-            n=1.3,
-            visualize=True,
-            light_focusness=i
-        )
