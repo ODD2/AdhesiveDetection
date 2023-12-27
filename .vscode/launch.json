@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: Test",
+            "type": "python",
+            "request": "launch",
+            "module": "test",
+            "justMyCode": true
+        },
+        {
             "name": "Python: Main",
             "type": "python",
             "request": "launch",
@@ -12,8 +19,8 @@
             "justMyCode": true,
             "args": [
                 "--test",
-                "--batch_size=1",
-                "--num_workers=0"
+                "--batch_size=30",
+                "--num_workers=8"
             ]
         },
         {
@@ -21,6 +28,17 @@
             "type": "python",
             "request": "launch",
             "module": "src.dataset",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: Inference",
+            "type": "python",
+            "request": "launch",
+            "module": "inference",
+            "args": [
+                "--model_path=models/rydx7w7d_87.pt",
+                "--image_path=dataset/test/type1/56_2.bmp"
+            ],
             "justMyCode": true
         }
     ]
